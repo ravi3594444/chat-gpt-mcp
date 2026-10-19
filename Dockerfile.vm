@@ -1,0 +1,9 @@
+# Prebuilt Linux x86_64 server for small VMs.
+FROM debian:bookworm-slim
+RUN useradd --uid 10001 --create-home bridge && mkdir /data && chown bridge:bridge /data
+COPY bin/browser-link-server-linux-x86_64 /usr/local/bin/browser-link-server
+RUN printf 'd4763f06aa74f1e2bdcae8b6320c1524f1fe0a73b3c0222683ba299e8fe7fcdf  /usr/local/bin/browser-link-server\n' | sha256sum --check --status && chmod 0755 /usr/local/bin/browser-link-server
+USER bridge
+ENV BROWSER_LINK_BIND=0.0.0.0:7319 BROWSER_LINK_DATA_DIR=/data
+EXPOSE 7319
+ENTRYPOINT ["browser-link-server"]

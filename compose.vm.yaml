@@ -1,0 +1,32 @@
+# Google Cloud Debian/Ubuntu x86_64 VM. Point DuckDNS here and open TCP 80/443.
+services:
+  bridge:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile.vm
+    restart: unless-stopped
+    environment:
+      BROWSER_LINK_PUBLIC_URL: https://extension-chat.duckdns.org
+    volumes:
+      - browser-link-data:/data
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - bridge
+    ports:
+      - "80:80"
+      - "443:443"
+    command:
+      - caddy
+      - reverse-proxy
+      - --from
+      - extension-chat.duckdns.org
+      - --to
+      - bridge:7319
+    volumes:
+      - browser-link-caddy:/data
+volumes:
+  browser-link-data:
+  browser-link-caddy:
