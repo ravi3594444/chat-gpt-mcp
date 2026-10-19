@@ -18,18 +18,10 @@ services:
     ports:
       - "80:80"
       - "443:443"
-    command:
-      - caddy
-      - reverse-proxy
-      - --from
-      - extension-chat.duckdns.org
-      - --to
-      - bridge:7319
-      # Also correct the policy for the packaged v0.1.0 binary.
-      - --header-down
-      - "Referrer-Policy: same-origin"
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
     volumes:
       - browser-link-caddy:/data
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
 volumes:
   browser-link-data:
   browser-link-caddy:

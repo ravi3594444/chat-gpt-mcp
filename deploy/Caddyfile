@@ -1,0 +1,12 @@
+{
+    admin off
+}
+
+extension-chat.duckdns.org {
+    reverse_proxy bridge:7319 {
+        # Compatibility for the packaged v0.1.0 server.
+        header_down Referrer-Policy same-origin
+        # Preserve newer per-request policies that already include a callback.
+        header_down Content-Security-Policy "form-action 'self';" "form-action 'self' https://chatgpt.com https://chat.openai.com;"
+    }
+}

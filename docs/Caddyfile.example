@@ -1,5 +1,8 @@
 # Run Caddy on the same machine as the Docker bridge. Point your DNS here first.
 # Set BROWSER_LINK_PUBLIC_URL=https://browser.example.com before starting the bridge.
 browser.example.com {
-    reverse_proxy 127.0.0.1:7319
+    reverse_proxy 127.0.0.1:7319 {
+        header_down Referrer-Policy same-origin
+        header_down Content-Security-Policy "form-action 'self';" "form-action 'self' https://chatgpt.com https://chat.openai.com;"
+    }
 }

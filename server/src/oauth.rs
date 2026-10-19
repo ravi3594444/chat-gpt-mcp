@@ -233,7 +233,7 @@ pub struct Authorize {
 pub async fn authorize(
     State(auth): State<Auth>,
     Query(input): Query<Authorize>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Response, StatusCode> {
     let mut store = auth.store.lock().unwrap();
     let client = store
         .clients
@@ -260,6 +260,13 @@ pub async fn authorize(
     }
     let nonce = random_token();
     let redirect = escape(&input.redirect_uri);
+    // Chrome applies form-action to the redirect following approval as well.
+    // Permit only the callback origin registered for this specific request.
+    let callback_origin = url::Url::parse(&input.redirect_uri)
+        .map_err(|_| StatusCode::BAD_REQUEST)?
+        .origin()
+        .ascii_serialization();
+    let policy = format!("default-src 'none'; style-src 'self'; form-action 'self' {callback_origin}; frame-ancestors 'none'; base-uri 'none'");
     store.approvals.insert(
         nonce.clone(),
         Approval {
@@ -267,28 +274,51 @@ pub async fn authorize(
             expires: now() + 300,
         },
     );
-    Ok(Html(format!(
+    Ok(([(header::CONTENT_SECURITY_POLICY, policy)], Html(format!(
         r#"<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Connect Browser Link</title><link rel="stylesheet" href="/style.css"></head><body><main><span class="tag">BROWSER LINK · PERSONAL</span><h1>Connect your browser.</h1><p>Allow this ChatGPT connection to use tabs you enable in the Browser Link extension. You can stop access in the extension at any time.</p><form method="post" action="/oauth/approve"><input type="hidden" name="nonce" value="{nonce}"><label for="key">Your Browser Link setup key</label><input id="key" type="password" name="key" autocomplete="off" required autofocus><button>Connect to ChatGPT</button></form><p class="muted">Find the key in your server’s data/admin.key file. Enter it here, never in chat.</p><p class="muted">Return address: {redirect}</p></main></body></html>"#
-    )))
+    ))).into_response())
 }
 #[derive(Deserialize)]
 pub struct Approve {
     nonce: String,
     key: String,
 }
-pub async fn approve(
-    State(auth): State<Auth>,
-    Form(input): Form<Approve>,
-) -> Result<Redirect, StatusCode> {
+
+fn approval_error(status: StatusCode, code: &str, message: &str) -> Response {
+    // Log a reason only, never the setup key, nonce, callback, or OAuth tokens.
+    eprintln!("OAuth approval rejected: {code}");
+    (status, Html(format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><title>Browser Link connection</title><link rel=\"stylesheet\" href=\"/style.css\"></head><body><main><span class=\"tag\">BROWSER LINK</span><h1>Connection needs another attempt.</h1><p>{}</p><p>Return to ChatGPT and start a new Browser Link connection. Submit the new approval form once.</p><p class=\"muted\">If a fresh attempt fails, share this error code: <code>{}</code></p></main></body></html>",
+        escape(message), escape(code)
+    ))).into_response()
+}
+
+pub async fn approve(State(auth): State<Auth>, Form(input): Form<Approve>) -> Response {
     if !equal(&input.key, &auth.admin_key) {
-        return Err(StatusCode::UNAUTHORIZED);
+        return approval_error(
+            StatusCode::UNAUTHORIZED,
+            "incorrect_setup_key",
+            "The setup key did not match this bridge.",
+        );
     }
     let mut store = auth.store.lock().unwrap();
-    let approval = store
-        .approvals
-        .remove(&input.nonce)
-        .filter(|r| r.expires > now())
-        .ok_or(StatusCode::BAD_REQUEST)?;
+    let approval = match store.approvals.remove(&input.nonce) {
+        Some(approval) if approval.expires > now() => approval,
+        Some(_) => {
+            return approval_error(
+                StatusCode::BAD_REQUEST,
+                "approval_request_expired",
+                "This approval request expired.",
+            )
+        }
+        None => {
+            return approval_error(
+                StatusCode::BAD_REQUEST,
+                "approval_request_missing",
+                "This approval request is unavailable or has already been submitted.",
+            )
+        }
+    };
     let input = approval.request;
     let code = random_token();
     store.codes.insert(
@@ -300,12 +330,21 @@ pub async fn approve(
             expires: now() + 120,
         },
     );
-    let mut redirect = url::Url::parse(&input.redirect_uri).map_err(|_| StatusCode::BAD_REQUEST)?;
+    let mut redirect = match url::Url::parse(&input.redirect_uri) {
+        Ok(redirect) => redirect,
+        Err(_) => {
+            return approval_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_callback",
+                "The registered return address was invalid.",
+            )
+        }
+    };
     redirect.query_pairs_mut().append_pair("code", &code);
     if let Some(state) = input.state {
         redirect.query_pairs_mut().append_pair("state", &state);
     }
-    Ok(Redirect::to(redirect.as_str()))
+    Redirect::to(redirect.as_str()).into_response()
 }
 
 #[derive(Deserialize)]

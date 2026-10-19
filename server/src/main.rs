@@ -144,7 +144,8 @@ async fn origin_and_headers(
     // HTML form POSTs use Origin: null under no-referrer. Preserve the origin
     // for our approval form while withholding referrers from other sites.
     headers.insert(header::REFERRER_POLICY, "same-origin".parse().unwrap());
-    headers.insert(header::CONTENT_SECURITY_POLICY,"default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'".parse().unwrap());
+    headers.entry(header::CONTENT_SECURITY_POLICY).or_insert_with(||
+        "default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'".parse().unwrap());
     headers.insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
     response
 }

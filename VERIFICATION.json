@@ -40,5 +40,12 @@
   "clippy_native_and_wasm": "passed",
   "plugin_and_mcp_schemas": "validated against Agent Plugins 1.0.0 schemas",
   "server_sha256": "d4763f06aa74f1e2bdcae8b6320c1524f1fe0a73b3c0222683ba299e8fe7fcdf",
-  "wasm_sha256": "6eb968320d68b4bb6474b70030b2dba211cdd7ada3d43d6b7da5f34b591126a7"
+  "wasm_sha256": "6eb968320d68b4bb6474b70030b2dba211cdd7ada3d43d6b7da5f34b591126a7",
+  "source_server_validation": {
+    "version": "0.1.1",
+    "integration_checks_passed": 32,
+    "compiled_server_sha256": "b31a0831a0a24ec670e83fe551cd17c66efe72aff88819594c2d8183767f0bf2",
+    "native_chrome_verified": false,
+    "note": "Current source was compiled and tested separately. The included v0.1.0 binary remains unchanged and uses the Caddy header compatibility rules."
+  }
 }

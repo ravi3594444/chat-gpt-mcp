@@ -53,6 +53,8 @@ try {
   const opaque=await fetch(bridge.base+'/oauth/approve',{method:'POST',headers:{Origin:'null'},body:new URLSearchParams({nonce:'invalid',key:'invalid'})});assert.equal(opaque.status,403);pass('Opaque-origin approval submissions remain blocked');
   const badRedirect=await fetch(bridge.base+'/oauth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({redirect_uris:['https://attacker.example/callback']})});assert.equal(badRedirect.status,400);pass('OAuth redirect allowlist rejects unrelated hosts');
   oauth=await bridge.authorize();pass('OAuth authorization, wrong-key rejection, PKCE exchange and state round-trip');
+  for(const redirect of ['https://chatgpt.com/connector/oauth/callback','https://chat.openai.com/connector/oauth/callback'])await bridge.authorize(undefined,redirect);
+  pass('ChatGPT callback policies and repeated-form error messages are correct');
   const replay=await fetch(bridge.base+'/oauth/token',{method:'POST',body:new URLSearchParams(oauth.form)});assert.equal(replay.status,400);pass('OAuth authorization codes cannot be replayed');
   const info=await bridge.rpc(oauth.access_token,'initialize',{protocolVersion:'2025-11-25',capabilities:{},clientInfo:{name:'browser-link-fixture',version:'1'}});assert.equal(info.serverInfo.name,'browser-link');pass('Real MCP protocol initialization');
   const tools=await bridge.rpc(oauth.access_token,'tools/list');assert.equal(tools.tools.length,9);assert.equal(tools.tools.find(t=>t.name==='browser_click').annotations.destructiveHint,true);pass('Nine MCP tools discover with consequential-click annotations');
