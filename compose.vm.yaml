@@ -25,6 +25,9 @@ services:
       - extension-chat.duckdns.org
       - --to
       - bridge:7319
+      # Also correct the policy for the packaged v0.1.0 binary.
+      - --header-down
+      - "Referrer-Policy: same-origin"
     volumes:
       - browser-link-caddy:/data
 volumes:

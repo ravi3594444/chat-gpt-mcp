@@ -141,7 +141,9 @@ async fn origin_and_headers(
     let mut response = next.run(request).await;
     let headers = response.headers_mut();
     headers.insert(header::X_CONTENT_TYPE_OPTIONS, "nosniff".parse().unwrap());
-    headers.insert(header::REFERRER_POLICY, "no-referrer".parse().unwrap());
+    // HTML form POSTs use Origin: null under no-referrer. Preserve the origin
+    // for our approval form while withholding referrers from other sites.
+    headers.insert(header::REFERRER_POLICY, "same-origin".parse().unwrap());
     headers.insert(header::CONTENT_SECURITY_POLICY,"default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'".parse().unwrap());
     headers.insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
     response

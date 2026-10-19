@@ -35,7 +35,9 @@ try {
   assert.equal(await popup.locator('#key').inputValue(),'');
   const tabId=await worker.evaluate(async url=>(await chrome.tabs.query({})).find(t=>t.url===url).id,fixtureUrl+'/contact');
   await popup.evaluate(tabId=>chrome.runtime.sendMessage({type:'enable',tabId}),tabId);
-  const token=await bridge.authorize();
+  const authorizationPage=await context.newPage();
+  const token=await bridge.authorize(authorizationPage);
+  await authorizationPage.close();
   const call=(name,args={})=>bridge.rpc(token.access_token,'tools/call',{name,arguments:args});
   const text=result=>JSON.parse(result.content.find(c=>c.type==='text').text);
   const tabs=text(await call('browser_tabs')).tabs;assert.deepEqual(tabs.map(t=>t.tab_id),[tabId]);
@@ -58,5 +60,5 @@ try {
   await waitFor(async()=>text(await call('browser_status')).connected===false,'Stop did not disconnect');
   const directory=join(root,'test-results');await mkdir(directory,{recursive:true});
   await writeFile(join(directory,'chrome.json'),JSON.stringify({passed:true,browser:context.browser()?.version(),note:'Actual unpacked extension and Rust/Wasm on local fixtures. Test-only manifest pre-grants fixture origins. Toolbar activeTab permission prompting and real screenshots require the manual smoke check.'},null,2)+'\n');
-  console.log('PASS real Chrome: pairing, enabled tabs, Wasm snapshots, fill, select, click, stale references, origin boundary and Stop.');
+  console.log('PASS real Chrome: OAuth form approval, pairing, enabled tabs, Wasm snapshots, fill, select, click, stale references, origin boundary and Stop.');
 } finally {await context?.close();await new Promise(r=>fixture.close(r));await bridge.stop();}

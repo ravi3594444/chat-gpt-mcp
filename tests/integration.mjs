@@ -50,6 +50,7 @@ try {
   const unauthorized=await fetch(bridge.base+'/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
   assert.equal(unauthorized.status,401);assert.match(unauthorized.headers.get('www-authenticate'),/oauth-protected-resource/);pass('Unauthenticated MCP is blocked with OAuth discovery');
   const origin=await fetch(bridge.base+'/health',{headers:{Origin:'https://attacker.example'}});assert.equal(origin.status,403);pass('Untrusted request origins are rejected');
+  const opaque=await fetch(bridge.base+'/oauth/approve',{method:'POST',headers:{Origin:'null'},body:new URLSearchParams({nonce:'invalid',key:'invalid'})});assert.equal(opaque.status,403);pass('Opaque-origin approval submissions remain blocked');
   const badRedirect=await fetch(bridge.base+'/oauth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({redirect_uris:['https://attacker.example/callback']})});assert.equal(badRedirect.status,400);pass('OAuth redirect allowlist rejects unrelated hosts');
   oauth=await bridge.authorize();pass('OAuth authorization, wrong-key rejection, PKCE exchange and state round-trip');
   const replay=await fetch(bridge.base+'/oauth/token',{method:'POST',body:new URLSearchParams(oauth.form)});assert.equal(replay.status,400);pass('OAuth authorization codes cannot be replayed');

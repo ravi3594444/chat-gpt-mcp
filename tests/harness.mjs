@@ -34,7 +34,7 @@ export async function startBridge() {
     if(envelope.error)throw new Error(JSON.stringify(envelope.error));
     return envelope.result;
   }
-  async function authorize() {
+  async function authorize(browserPage) {
     const redirect='http://127.0.0.1:9876/callback';
     const registered=await fetch(base+'/oauth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({redirect_uris:[redirect],token_endpoint_auth_method:'none'})});
     assert.equal(registered.status,201);
@@ -44,13 +44,27 @@ export async function startBridge() {
     const query=new URLSearchParams({client_id,redirect_uri:redirect,response_type:'code',code_challenge:challenge,code_challenge_method:'S256',state:'fixture-state',resource:base+'/mcp',scope:'browser:control'});
     const page=await fetch(base+'/oauth/authorize?'+query);
     assert.equal(page.status,200);
+    assert.equal(page.headers.get('referrer-policy'),'same-origin','HTML form POSTs must retain their same-origin Origin header');
     const html=await page.text();
     const nonce=html.match(/name="nonce" value="([^"]+)"/)[1];
-    const bad=await fetch(base+'/oauth/approve',{method:'POST',body:new URLSearchParams({nonce,key:'incorrect-key'}),redirect:'manual'});
+    const bad=await fetch(base+'/oauth/approve',{method:'POST',headers:{Origin:base},body:new URLSearchParams({nonce,key:'incorrect-key'}),redirect:'manual'});
     assert.equal(bad.status,401);
-    const approved=await fetch(base+'/oauth/approve',{method:'POST',body:new URLSearchParams({nonce,key}),redirect:'manual'});
-    assert.equal(approved.status,303);
-    const callback=new URL(approved.headers.get('location'));
+    let callback;
+    if(browserPage){
+      // Submit a real browser form so Chrome supplies Origin itself.
+      await browserPage.route(redirect+'*',route=>route.fulfill({status:200,contentType:'text/plain',body:'Local OAuth callback complete'}));
+      await browserPage.goto(base+'/oauth/authorize?'+query);
+      await browserPage.locator('#key').fill(key);
+      await Promise.all([
+        browserPage.waitForURL(url=>url.origin==='http://127.0.0.1:9876'&&url.pathname==='/callback'),
+        browserPage.getByRole('button',{name:'Connect to ChatGPT'}).click()
+      ]);
+      callback=new URL(browserPage.url());
+    }else{
+      const approved=await fetch(base+'/oauth/approve',{method:'POST',headers:{Origin:base},body:new URLSearchParams({nonce,key}),redirect:'manual'});
+      assert.equal(approved.status,303);
+      callback=new URL(approved.headers.get('location'));
+    }
     assert.equal(callback.searchParams.get('state'),'fixture-state');
     const code=callback.searchParams.get('code');
     const form={grant_type:'authorization_code',client_id,code,code_verifier:verifier,redirect_uri:redirect,resource:base+'/mcp'};
