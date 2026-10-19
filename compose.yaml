@@ -1,0 +1,13 @@
+services:
+  bridge:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7319:7319"
+    environment:
+      BROWSER_LINK_PUBLIC_URL: ${BROWSER_LINK_PUBLIC_URL:-http://127.0.0.1:7319}
+    volumes:
+      - browser-link-data:/data
+
+volumes:
+  browser-link-data:

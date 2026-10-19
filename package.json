@@ -1,0 +1,15 @@
+{
+  "name": "browser-link",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/integration.mjs",
+    "test:chrome": "node tests/chrome.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^27.0.0",
+    "playwright": "1.62.1",
+    "ws": "^8.22.0"
+  }
+}

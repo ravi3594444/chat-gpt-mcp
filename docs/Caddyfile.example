@@ -1,0 +1,5 @@
+# Run Caddy on the same machine as the Docker bridge. Point your DNS here first.
+# Set BROWSER_LINK_PUBLIC_URL=https://browser.example.com before starting the bridge.
+browser.example.com {
+    reverse_proxy 127.0.0.1:7319
+}
