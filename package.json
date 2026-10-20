@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "node tests/integration.mjs",
-    "test:chrome": "node tests/chrome.mjs"
+    "test:chrome": "node tests/chrome.mjs",
+    "test:quality": "node tests/snapshot-quality.mjs"
   },
   "devDependencies": {
     "jsdom": "^27.0.0",

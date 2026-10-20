@@ -23,7 +23,7 @@ pub struct SnapshotRequest {
     pub detail: Detail,
     /// Text characters to return: default 4000 compact / 16000 full; 0 for controls only.
     pub max_chars: Option<usize>,
-    /// Controls to return: default 40 compact / 250 full; maximum 250.
+    /// Controls to return: default 250 in both modes; use a lower limit to page.
     pub max_elements: Option<usize>,
     /// Start character in the matching text; use next_text_offset from the previous result.
     #[serde(default)]
@@ -85,7 +85,7 @@ impl References {
         let max_chars = request
             .max_chars
             .unwrap_or(if full { 16_000 } else { 4_000 });
-        let max_elements = request.max_elements.unwrap_or(if full { 250 } else { 40 });
+        let max_elements = request.max_elements.unwrap_or(250);
         let query = request.query.as_deref().unwrap_or("").trim().to_lowercase();
         let source_text = raw["text"].as_str().unwrap_or_default();
         let filtered_text = matching_text(source_text, &query);
@@ -103,7 +103,6 @@ impl References {
             .collect();
         let mut references = HashMap::new();
         let mut elements = Vec::new();
-        let mut element_bytes = 0;
         for (index, element) in matching
             .iter()
             .enumerate()
@@ -126,13 +125,6 @@ impl References {
             if !full {
                 compact_element(object);
             }
-            // Bound the default control list by size as well as count. Each compact
-            // control is itself bounded by the core's labels/URLs and the limits below.
-            let bytes = element.to_string().len();
-            if !full && !elements.is_empty() && element_bytes + bytes > 12_000 {
-                break;
-            }
-            element_bytes += bytes;
             references.insert(reference, original);
             elements.push(element);
         }

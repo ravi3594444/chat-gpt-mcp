@@ -9,15 +9,22 @@ The old snapshot forwarded up to 16,000 text characters, 250 controls, 1,000
 characters per field value, and 80 options per dropdown on every read. It also
 repeated a long document nonce in every element reference.
 
-Server 0.1.2 changes the default presentation:
+Server 0.1.3 changes the default presentation:
 
 | Data | Compact default | More detail |
 | --- | --- | --- |
 | Page text | 4,000 characters | `next_text_offset` or `max_chars` up to 16,000 |
-| Controls | Up to 40, with a 12 KB list budget | `next_element_offset` or `max_elements` up to 250 |
+| Controls | All extracted controls, up to 250 | Set `max_elements` explicitly to page with `next_element_offset` |
 | Field values | 160 characters, with `value_truncated` when shortened | `detail: "full"` |
 | Dropdown options | Up to 5 with short values; omissions marked | `detail: "full"` |
 | References | Short aliases scoped to one tab and snapshot | Same underlying Wasm identity checks |
+
+The initial 40-control default was too aggressive: a real conversation page put
+the message composer, attachments, and model selector after that cutoff. Version
+0.1.3 removes the extra control count and byte cutoffs, preserving all controls
+already extracted by the extension. Text, long values, and options still use the
+compact limits above; their omissions must be recovered when needed for a task.
+Use full detail for reading or analyzing an entire page.
 
 Search page text and control labels, values, links, and dropdown options with
 `query`. Text matches include neighboring lines; text offsets then refer to this
@@ -65,7 +72,7 @@ sudo docker compose -f compose.vm.yaml -f compose.vm.source.yaml up -d --build
 curl --fail --show-error https://extension-chat.duckdns.org/health
 ```
 
-The health response must report `0.1.2`. The source build uses one Cargo job and
+The health response must report `0.1.3`. The source build uses one Cargo job and
 disables release LTO to reduce peak memory on a 2 GB VM. The first build takes
 time and requires disk space for the Rust image and build files. Existing Compose
 volumes retain pairing and OAuth data. Use both Compose files for future bridge
@@ -82,8 +89,18 @@ boundaries, and OAuth. `test-results/snapshot-size.json` compares serialized raw
 and compact output for a synthetic dashboard; it measures payload size, not model
 tokens. Native Chrome remains a separate check with `npm run test:chrome`.
 
-The local dashboard fixture produced 29,135 characters before compaction and
-7,048 after: a 75.8% reduction in serialized snapshot text. Actual savings vary
-with the page and requested detail. Validation passed five Rust unit tests,
-39 integration checks, and native Clippy with warnings denied. The VM Docker
-build and native Chrome smoke check still need to run in their target environments.
+`npm run test:quality` replays a conversation-style fixture through the
+real MCP server and checks full-detail equivalence and late control recovery.
+It fails if the default omits a control; `ALLOW_MISSING_CONTROLS=1` explicitly
+allows omissions when measuring an older version as a baseline. An optional
+snapshot JSON path supports a private live capture; do not commit those captures.
+This checks returned data, not a complete model-driven browser workflow. The VM
+Docker build and native Chrome smoke check still need their target environments.
+
+Validation for 0.1.3 passed five Rust unit tests, 39 integration checks, native
+Clippy, and both synthetic and live-capture replay checks. The live capture
+retained all 76 extracted controls and all 3,229 text characters; serialized
+output fell from 13,704 to 10,118 characters (26.2%). The dashboard fixture retained
+its late composer controls and shrank from 29,538 to 11,623 characters (60.7%).
+These are payload measurements, not billed model tokens or a general guarantee
+of equal task success. Private live page content is excluded from the repository.
