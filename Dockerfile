@@ -6,7 +6,7 @@ COPY core ./core
 COPY server ./server
 ARG CARGO_BUILD_JOBS=1
 ARG CARGO_PROFILE_RELEASE_LTO=false
-ARG CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
+ARG CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 RUN cargo build --release --locked -p browser-link-server
 
 FROM debian:bookworm-slim

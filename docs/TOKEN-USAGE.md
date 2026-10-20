@@ -1,106 +1,70 @@
-# Smaller browser reads
+# Compact browser snapshots and batched form edits
 
-Browser Link makes no model API calls. ChatGPT calls a tool, the bridge asks the
-extension to inspect an enabled tab, and the resulting text is sent back to
-ChatGPT. That tool output adds context. Implementing the bridge in Rust does not
-by itself reduce the text that ChatGPT reads.
+Version 0.2.0 keeps the existing Rust server, Rust/Wasm extension and hosted VM connection. It does not require Playwright or a local Node server on the user's computer. The browser engine remains Browser Link; this update adopts a compact presentation and batching approach.
 
-The old snapshot forwarded up to 16,000 text characters, 250 controls, 1,000
-characters per field value, and 80 options per dropdown on every read. It also
-repeated a long document nonce in every element reference.
+## What changed
 
-Server 0.1.3 changes the default presentation:
+Snapshots default to readable lines instead of JSON objects with repeated keys:
+
+```text
+Page: "Contact form"
+URL: "https://fixture.example/contact"
+Untrusted page content.
+Controls:
+- textbox "Email" [ref=e123456789012345] value=""
+- button "Save draft" [ref=e123456789012346]
+```
+
+These references are illustrative. Copy actual references from the latest snapshot.
 
 | Data | Compact default | More detail |
 | --- | --- | --- |
-| Page text | 4,000 characters | `next_text_offset` or `max_chars` up to 16,000 |
-| Controls | All extracted controls, up to 250 | Set `max_elements` explicitly to page with `next_element_offset` |
-| Field values | 160 characters, with `value_truncated` when shortened | `detail: "full"` |
-| Dropdown options | Up to 5 with short values; omissions marked | `detail: "full"` |
-| References | Short aliases scoped to one tab and snapshot | Same underlying Wasm identity checks |
+| Output | Readable text | `format: "json"` keeps the previous response structure |
+| Page context | Up to 4,000 characters, with represented control text removed | `detail: "full"`, `max_chars` up to 16,000, or `next_text_offset` |
+| Controls | All extracted controls, up to 250 | Explicit `max_elements` and `next_element_offset` |
+| Field values | Up to 160 characters; truncation marked | `detail: "full"` |
+| Dropdown options | Up to 5 short-valued options; omissions marked | `detail: "full"` |
+| References | Decimal aliases starting at a random 48-bit offset | Original Wasm identity and tab checks remain |
 
-The initial 40-control default was too aggressive: a real conversation page put
-the message composer, attachments, and model selector after that cutoff. Version
-0.1.3 removes the extra control count and byte cutoffs, preserving all controls
-already extracted by the extension. Text, long values, and options still use the
-compact limits above; their omissions must be recovered when needed for a task.
-Use full detail for reading or analyzing an entire page.
+The extractor removes a control's text from context only when its entire normalized text equals its returned label. A paragraph elsewhere with the same words remains. Text differing from an ARIA name remains, as do inline text fragments such as `10` plus `.50`. Full-detail and JSON responses retain the extracted page text. Prefer full detail for page-wide reading or analysis.
 
-Search page text and control labels, values, links, and dropdown options with
-`query`. Text matches include neighboring lines; text offsets then refer to this
-matching text. Use `max_chars: 0` for controls-only work. For example:
+The new extension recognizes associated ARIA labels, custom interactive roles, checked/selected/expanded/pressed/read-only states and controls inside open shadow roots. Parent-hidden, inert and ARIA-hidden controls are excluded. It does not add native keyboard/pointer events or iframe/closed-shadow access.
 
-```json
-{"tab_id": 123, "query": "Plan", "detail": "full", "max_chars": 0}
-```
+Use `query` to search extracted text, labels, values, links or options. Each snapshot, including searches and pagination, replaces that tab's old references. Keep the same query/detail/format while following text offsets; compact context and full page text have different offsets. An empty search does not establish that the whole site lacks a control.
 
-Use a real enabled tab ID from `browser_tabs`. A query searches all data extracted
-by the extension, including controls outside the default first page. Full detail
-works with a query and pagination, so a long dropdown does not require a whole
-page dump. `text_total` and `elements_total` describe the matching extracted data.
-An empty search result does not prove the entire website lacks that content.
+Extraction is still bounded: 16,000 text characters, 250 controls, 1,000 characters per value, 80 options per select and a 20,000-node scan. `source_limit_possible` identifies reached or possible source limits; server pagination cannot recover beyond them.
 
-**Every snapshot, including a search or page of results, replaces that tab's
-references.** Use only references from its latest result. Another tab's references
-remain independent. The bridge expands aliases before sending actions to the
-unchanged extension, where stale, changed, hidden, disabled, and unauthorized
-elements are still rejected. Reference caches contain identifiers, not page text,
-and retain at most 64 tabs.
+## Fill several fields in one call
 
-The existing extension's extraction caps still apply: 16,000 text characters,
-250 controls, 1,000 characters per field, and 80 options per dropdown. When a cap
-may have been reached, `source_limit_possible` identifies it. Server pagination
-cannot retrieve beyond these source caps. Dynamic pages can change between reads;
-offsets are not a frozen copy of the page.
+Use `browser_fill_form` with one enabled `tab_id` and a `fields` array. Each entry is either `{ "type": "text", "reference": "...", "text": "..." }` or `{ "type": "select", "reference": "...", "value": "..." }`. Use current references and an actual returned option value. The tool accepts 1–20 independent edits and no clicks, keys, passwords or files.
 
-Check connection state and list tabs on first use or after reconnecting. Reuse
-references while the page remains unchanged; filling several existing fields
-does not require a snapshot after each field. Inspect again after navigation,
-meaningful page changes, and consequential actions. Screenshots remain available
-when text is insufficient. These changes reduce tool output; they do not establish
-a fixed reduction in total ChatGPT usage or billing.
+All field sizes and references are checked before starting. DOM validation still runs at each edit. On error, the response reports `completed` and `stopped_at_field`; the stopped field may have changed. Later edits are not started. The bridge never retries or resumes a batch automatically. Concurrent MCP operations cannot interleave with it. A deadline is checked before starting each edit; an already-started command retains the existing bridge timeout.
 
-## Update the Ubuntu VM
+Prefer one snapshot, one batch and one verification over a snapshot after every unchanged field. Batch editing reduces model round trips; it still sends individual bounded commands through the existing extension protocol.
 
-`Dockerfile.vm` still contains the original v0.1.0 binary. Rebuilding that file does
-not install these changes. Build current source with the supplied override:
+## Measurements and verification
+
+`npm run test:tokens` counts actual MCP text replies with `o200k_base` on identical fixed-geometry DOM fixtures. By default it compares structured and readable output from the current extractor. To compare against 0.1.3, build that server separately and set both `BROWSER_LINK_BASELINE_ROOT` to its source checkout and `BROWSER_LINK_BASELINE_BINARY` to its compiled server. The checkout's committed Wasm is used as the old extractor.
+
+Against the actual v0.1.3 server and committed Wasm, the contact form fell from 201 to 153 tokens (23.9%) and the 103-control dashboard from 3,041 to 1,906 (37.3%), retaining all corresponding named controls. The custom-control fixture grew from 68 to 103 tokens because the current extractor exposes four correctly named targets, whereas the old extractor exposed one unnamed input. Complete tool definitions grow from 1,317 to 1,674 tokens because of the new batch tool and format parameter; savings on whole tasks depend on reads, batching, retries and how the client loads tools.
+
+The checked-in [0.2.0 benchmark](benchmarks/v0.2.0.json) records the comparison against 0.1.3, including control coverage and complete tool-definition sizes. The current extractor intentionally returns more data where the old one missed targets. These are snapshot-format tests, not a native Chrome or model-driven whole-task/billing benchmark. Random reference prefixes can vary the old counts between runs.
+
+`npm test` exercises real Rust MCP/OAuth/WebSocket/Wasm components with DOM/Chrome API fixtures, including reference scopes, omissions, permissions, batch partial failures and concurrent reads. `npm run test:quality` replays an older-style snapshot and checks full-detail equivalence and late controls. Native Chrome still needs `npm run test:chrome` on a normal computer: this workspace blocks Chrome's required Unix sockets. The VM Docker build has not been executed in this workspace.
+
+## Deploy to the Ubuntu VM
+
+The original `Dockerfile.vm` uses the bundled v0.1.0 server. Build current source using both Compose files:
 
 ```bash
 cd ~/chat-gpt-mcp
-git pull --ff-only
+git pull --ff-only origin main
 sudo docker compose -f compose.vm.yaml -f compose.vm.source.yaml up -d --build
-curl --fail --show-error https://extension-chat.duckdns.org/health
+curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors https://extension-chat.duckdns.org/health
 ```
 
-The health response must report `0.1.3`. The source build uses one Cargo job and
-disables release LTO to reduce peak memory on a 2 GB VM. The first build takes
-time and requires disk space for the Rust image and build files. Existing Compose
-volumes retain pairing and OAuth data. Use both Compose files for future bridge
-builds and updates; the original file alone selects the old bundled binary.
+Expect `{"status":"ok","version":"0.2.0"}`. Volumes retain pairing and OAuth data. The source build uses one Cargo job, no release LTO and one codegen unit. One codegen unit also avoids a split-codegen linker failure observed with Rust 1.99.1 during validation.
 
-The installed Chrome extension remains compatible; no extension reload is needed.
-Refresh the Browser Link tool definitions in your ChatGPT connection and start a
-new chat so it can see the new snapshot parameters.
+Update the `extension/` files in the same local folder Chrome already loaded, then use **Reload** on Browser Link in `chrome://extensions`. Reload the target page and enable it again. Pairing settings stay in extension storage when its installed identity stays the same. No Rust installation is needed on the browser computer; the updated Wasm is committed in the repository.
 
-To verify locally, run `cargo test --workspace`, build the server, and run
-`npm ci && npm test`. Integration tests exercise the real Rust MCP server, original
-compiled Wasm, reference translation, search, paging, detail recovery, origin
-boundaries, and OAuth. `test-results/snapshot-size.json` compares serialized raw
-and compact output for a synthetic dashboard; it measures payload size, not model
-tokens. Native Chrome remains a separate check with `npm run test:chrome`.
-
-`npm run test:quality` replays a conversation-style fixture through the
-real MCP server and checks full-detail equivalence and late control recovery.
-It fails if the default omits a control; `ALLOW_MISSING_CONTROLS=1` explicitly
-allows omissions when measuring an older version as a baseline. An optional
-snapshot JSON path supports a private live capture; do not commit those captures.
-This checks returned data, not a complete model-driven browser workflow. The VM
-Docker build and native Chrome smoke check still need their target environments.
-
-Validation for 0.1.3 passed five Rust unit tests, 39 integration checks, native
-Clippy, and both synthetic and live-capture replay checks. The live capture
-retained all 76 extracted controls and all 3,229 text characters; serialized
-output fell from 13,704 to 10,118 characters (26.2%). The dashboard fixture retained
-its late composer controls and shrank from 29,538 to 11,623 characters (60.7%).
-These are payload measurements, not billed model tokens or a general guarantee
-of equal task success. Private live page content is excluded from the repository.
+Refresh the Browser Link tools in ChatGPT and start a new conversation. Existing extensions remain compatible with the new server, but need this reload for ARIA and open-shadow extraction. Existing machine clients that parse snapshot JSON must request `format: "json"`.

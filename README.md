@@ -85,11 +85,15 @@ This creates `plugin/mcp.json` with the real endpoint. `plugin/mcp.example.json`
 
 ## Available tools
 
-`browser_status`, `browser_tabs`, `browser_snapshot`, `browser_click`, `browser_fill`, `browser_select`, `browser_scroll`, `browser_navigate`, `browser_screenshot`.
+`browser_status`, `browser_tabs`, `browser_snapshot`, `browser_click`, `browser_fill`, `browser_fill_form`, `browser_select`, `browser_scroll`, `browser_navigate`, `browser_screenshot`.
 
-Server 0.1.3 returns compact snapshots by default: up to 4,000 text characters, all extracted controls (up to 250), short references, and marked text/value/option omissions. Use `query` for known controls, explicit element limits to page, or `detail: "full"` for page-wide analysis and complete extracted values/options. A new snapshot invalidates that tab's old references. Removed/hidden elements and changed element identities are rejected. Clicks may have real consequences; the agent must follow the user's authorized task and verify outcomes. Timed-out actions are not retried automatically. See [token usage and VM update steps](docs/TOKEN-USAGE.md); the bundled binary remains v0.1.0 and needs the source-build override for these features.
+Server/extension 0.2.0 uses readable, Playwright-style control lines by default. It preserves all extracted controls (up to 250), field/toggle state, exact action references and omission notices. Control text is removed from the context section only when the same complete text is already its returned control label. Unrelated matching words and visible text differing from an ARIA name remain. Use `format: "json"` for the compatible structured response, `query` for focused reads, or `detail: "full"` for page-wide text and complete extracted values/options. Each snapshot replaces that tab's references. References remain scoped to the tab and are checked against the original Wasm element identity.
 
-This version operates the top-level document. It does not automate password entry, file uploads, browser settings, arbitrary JavaScript, cross-origin frames, closed shadow roots, or canvas controls. Screenshots use the active enabled tab's visible viewport and can contain private page content. The extension has no cookie-export or browsing-history API. There is one paired, connected browser per bridge.
+`browser_fill_form` edits 1–20 independent text fields or native selects in one MCP call, without clicking or pressing Enter. It stops on the first failure and reports completed edits. It is not atomic: inspect current values before continuing rather than resending a partially completed batch. Concurrent MCP reads cannot invalidate a batch's remaining references.
+
+The updated Rust/Wasm extractor recognizes `aria-labelledby`, custom interactive roles and toggle states, and targets inside open shadow roots. Existing tab/origin grants and password/file restrictions remain. It does not provide Playwright's full automation engine, native keyboard/pointer events, cross-origin frame access, closed shadow roots or canvas controls. Screenshots capture the enabled tab's visible viewport. There is one paired, connected browser per bridge; page contents are not saved by the bridge.
+
+See [token measurements and deployment](docs/TOKEN-USAGE.md). The bundled static server is still v0.1.0: use the source-build Compose override for 0.2.0. Existing extensions can use the new server's readable snapshots and batch tool, but the new control extraction requires updating the installed `extension/` files and reloading the extension and target pages.
 
 ## Build from source
 
@@ -111,6 +115,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo clippy -p browser-link-core --target wasm32-unknown-unknown -- -D warnings
 npm ci
 npm test
+npm run test:quality
+npm run test:tokens
 ```
 
 For the packaged static Linux binary, set `BROWSER_LINK_TEST_BINARY` to its absolute path before `npm test`; otherwise the suite uses `target/release/browser-link-server`.

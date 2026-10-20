@@ -38,7 +38,7 @@ try {
   const authorizationPage=await context.newPage();
   const token=await bridge.authorize(authorizationPage);
   await authorizationPage.close();
-  const call=(name,args={})=>bridge.rpc(token.access_token,'tools/call',{name,arguments:args});
+  const call=(name,args={})=>bridge.rpc(token.access_token,'tools/call',{name,arguments:name==='browser_snapshot'?{format:'json',...args}:args});
   const text=result=>JSON.parse(result.content.find(c=>c.type==='text').text);
   const tabs=text(await call('browser_tabs')).tabs;assert.deepEqual(tabs.map(t=>t.tab_id),[tabId]);
   let snapshot=text(await call('browser_snapshot',{tab_id:tabId}));assert.match(snapshot.text,/Contact workspace/);
@@ -48,11 +48,16 @@ try {
   const selected=snapshot.elements.find(e=>e.label==='Plan').reference;
   assert(!(await call('browser_select',{tab_id:tabId,reference:selected,value:'pro'})).isError);
   assert.equal(await page.locator('#plan').inputValue(),'pro');
+  assert(!(await call('browser_fill_form',{tab_id:tabId,fields:[{type:'text',reference:name,text:'Alex'},{type:'select',reference:selected,value:'basic'}]})).isError);
+  assert.equal(await page.locator('#name').inputValue(),'Alex');assert.equal(await page.locator('#plan').inputValue(),'basic');
+  assert.equal(await page.locator('#result').textContent(),'');
   const save=snapshot.elements.find(e=>e.label==='Save draft').reference;
   assert(!(await call('browser_click',{tab_id:tabId,reference:save})).isError);
   assert.equal(await page.locator('#result').textContent(),'Draft saved for Alex');
   snapshot=text(await call('browser_snapshot',{tab_id:tabId}));assert.equal(snapshot.elements.find(e=>e.label==='Customer name').value,'Alex');
   assert((await call('browser_click',{tab_id:tabId,reference:save})).isError);
+  const readable=await bridge.rpc(token.access_token,'tools/call',{name:'browser_snapshot',arguments:{tab_id:tabId}});
+  assert(!readable.isError);assert(readable.content[0].text.includes('textbox "Customer name"'));assert(readable.content[0].text.includes('value="Alex"'));
   assert((await call('browser_navigate',{tab_id:tabId,url:'https://unapproved.example/'})).isError);
   // Capturing a viewport requires the actual toolbar activeTab grant; do that in
   // the manual smoke check, rather than broadening this test copy to <all_urls>.
@@ -60,5 +65,5 @@ try {
   await waitFor(async()=>text(await call('browser_status')).connected===false,'Stop did not disconnect');
   const directory=join(root,'test-results');await mkdir(directory,{recursive:true});
   await writeFile(join(directory,'chrome.json'),JSON.stringify({passed:true,browser:context.browser()?.version(),note:'Actual unpacked extension and Rust/Wasm on local fixtures. Test-only manifest pre-grants fixture origins. Toolbar activeTab permission prompting and real screenshots require the manual smoke check.'},null,2)+'\n');
-  console.log('PASS real Chrome: OAuth form approval, pairing, enabled tabs, Wasm snapshots, fill, select, click, stale references, origin boundary and Stop.');
+  console.log('PASS real Chrome: OAuth form approval, pairing, enabled tabs, readable/JSON Wasm snapshots, individual and batched edits, click, stale references, origin boundary and Stop.');
 } finally {await context?.close();await new Promise(r=>fixture.close(r));await bridge.stop();}

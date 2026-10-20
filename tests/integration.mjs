@@ -19,7 +19,7 @@ let activeId=1;
 let latestRawSnapshot;
 const tabs=new Map([[1,{id:1,windowId:1,url:'https://fixture.example/contact',title:'Contact fixture'}],[2,{id:2,windowId:1,url:'https://private.example/account',title:'Private tab'}]]);
 const dom=new JSDOM(fixtureHTML,{url:tabs.get(1).url,pretendToBeVisual:true});
-for(const name of ['Window','Document','Element','Node','HtmlElement','HTMLElement','HTMLInputElement','HTMLTextAreaElement','HTMLSelectElement','Event','EventInit'])if(dom.window[name])globalThis[name]=dom.window[name];
+for(const name of ['Window','Document','Element','Node','HtmlElement','HTMLElement','HTMLInputElement','HTMLTextAreaElement','HTMLSelectElement','ShadowRoot','Event','EventInit'])if(dom.window[name])globalThis[name]=dom.window[name];
 globalThis.window=dom.window;globalThis.document=dom.window.document;
 dom.window.HTMLElement.prototype.getBoundingClientRect=function(){return {width:200,height:30,top:0,left:0,right:200,bottom:30,x:0,y:0};};
 dom.window.HTMLElement.prototype.scrollIntoView=function(){};
@@ -50,7 +50,7 @@ globalThis.chrome={
 };
 async function message(payload){return new Promise((resolve,reject)=>{listeners[0](payload,{},result=>result?.error?reject(new Error(result.error)):resolve(result));});}
 let oauth;
-async function call(name,args={}){return bridge.rpc(oauth.access_token,'tools/call',{name,arguments:args});}
+async function call(name,args={}){return bridge.rpc(oauth.access_token,'tools/call',{name,arguments:name==='browser_snapshot'?{format:'json',...args}:args});}
 function text(result){assert(!result.isError,result.content?.map(c=>c.text).join('\n'));return JSON.parse(result.content.find(c=>c.type==='text').text);}
 try {
   const unauthorized=await fetch(bridge.base+'/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
@@ -63,7 +63,7 @@ try {
   pass('ChatGPT callback policies and repeated-form error messages are correct');
   const replay=await fetch(bridge.base+'/oauth/token',{method:'POST',body:new URLSearchParams(oauth.form)});assert.equal(replay.status,400);pass('OAuth authorization codes cannot be replayed');
   const info=await bridge.rpc(oauth.access_token,'initialize',{protocolVersion:'2025-11-25',capabilities:{},clientInfo:{name:'browser-link-fixture',version:'1'}});assert.equal(info.serverInfo.name,'browser-link');pass('Real MCP protocol initialization');
-  const tools=await bridge.rpc(oauth.access_token,'tools/list');assert.equal(tools.tools.length,9);assert.equal(tools.tools.find(t=>t.name==='browser_click').annotations.destructiveHint,true);pass('Nine MCP tools discover with consequential-click annotations');
+  const tools=await bridge.rpc(oauth.access_token,'tools/list');assert.equal(tools.tools.length,10);assert.equal(tools.tools.find(t=>t.name==='browser_click').annotations.destructiveHint,true);pass('Ten MCP tools discover with consequential-click annotations');
   assert.equal(text(await call('browser_status')).connected,false);pass('Offline browser state is explicit');
   const pkg=join(root,'extension/pkg/browser_link_core.js');
   globalThis.__browserLinkWasmBytes=new Uint8Array(await readFile(join(root,'extension/pkg/browser_link_core_bg.wasm')));
@@ -87,6 +87,18 @@ try {
   assert.equal((await call('browser_select',{tab_id:1,reference:plan,value:'pro'})).isError,false);assert.equal(document.getElementById('plan').value,'pro');pass('Native select options work through MCP');
   const password=snap.elements.find(e=>e.type==='password').reference;
   assert.equal((await call('browser_fill',{tab_id:1,reference:password,text:'blocked'})).isError,true);pass('Password input automation is blocked');
+  const note=snap.elements.find(e=>e.label==='Notes').reference;
+  const filled=await call('browser_fill_form',{tab_id:1,fields:[{type:'text',reference:name,text:'Batch customer'},{type:'text',reference:note,text:'Prepared locally'},{type:'select',reference:plan,value:'basic'}]});
+  assert.deepEqual(text(filled),{ok:true,filled:3});
+  assert.equal(document.getElementById('name').value,'Batch customer');assert.equal(document.getElementById('note').value,'Prepared locally');assert.equal(document.getElementById('plan').value,'basic');assert.equal(document.getElementById('result').textContent,'');
+  pass('One MCP form call edits multiple fields without clicking submit');
+  for(const fields of [[],[{type:'text',reference:name,text:'must not apply'},{type:'text',reference:'invalid',text:'x'}],[{type:'text',reference:name,text:'must not apply'},{type:'text',reference:name,text:'duplicate'}],[{type:'text',reference:name,text:'x'.repeat(20001)}]])assert.equal((await call('browser_fill_form',{tab_id:1,fields})).isError,true);
+  assert.equal(document.getElementById('name').value,'Batch customer');
+  pass('Invalid batch inputs and stale or duplicate refs fail before editing fields');
+  const partial=await call('browser_fill_form',{tab_id:1,fields:[{type:'text',reference:name,text:'Partial customer'},{type:'text',reference:password,text:'blocked'},{type:'text',reference:note,text:'must not apply'}]});
+  assert.equal(partial.isError,true);const progress=JSON.parse(partial.content[0].text);assert.equal(progress.completed,1);assert.equal(progress.stopped_at_field,2);assert.equal(document.getElementById('name').value,'Partial customer');assert.equal(document.getElementById('note').value,'Prepared locally');
+  pass('A failed batch reports partial completion and never executes later fields');
+  await call('browser_fill',{tab_id:1,reference:name,text:'Alex'});
   const save=snap.elements.find(e=>e.label==='Save draft').reference;
   document.querySelector('button[type="submit"]').textContent='Delete everything';
   assert.equal((await call('browser_click',{tab_id:1,reference:save})).isError,true);
@@ -140,6 +152,40 @@ try {
   notes=text(await call('browser_snapshot',{tab_id:1,query:'Notes',detail:'full',max_chars:0})).elements[0];
   assert.equal(notes.value,longNote);
   bulk.remove();pass('Long values are marked in compact output and recovered with full detail');
+  const advanced=document.createElement('section');
+  advanced.innerHTML='<span id="aria-email-label">Contact email</span><input id="aria-email" aria-labelledby="aria-email-label"><div role="checkbox" aria-checked="true">Subscribe to updates</div><div role="switch" aria-label="Notifications" aria-checked="false"></div><div id="shadow-host"></div><div style="display:none"><button>Parent-hidden action</button></div><p>Save draft</p><p>Total <span>10</span><span>.50</span></p><button aria-label="Approve record">Accept record</button>';
+  document.body.append(advanced);
+  const shadow=document.getElementById('shadow-host').attachShadow({mode:'open'});shadow.innerHTML='<button id="shadow-save">Shadow save</button><label for="shadow-name">Shadow name</label><input id="shadow-name">';
+  let shadowClicked=false;shadow.getElementById('shadow-save').onclick=()=>{shadowClicked=true;};
+  const advancedSnapshot=text(await call('browser_snapshot',{tab_id:1}));
+  for(const label of ['Contact email','Subscribe to updates','Notifications','Shadow save','Shadow name'])assert(advancedSnapshot.elements.some(e=>e.label===label),label);
+  assert.equal(advancedSnapshot.elements.find(e=>e.label==='Subscribe to updates').checked,true);assert.equal(advancedSnapshot.elements.find(e=>e.label==='Notifications').checked,false);
+  assert(!advancedSnapshot.elements.some(e=>e.label==='Parent-hidden action'));
+  await call('browser_click',{tab_id:1,reference:advancedSnapshot.elements.find(e=>e.label==='Shadow save').reference});assert(shadowClicked);
+  await call('browser_fill',{tab_id:1,reference:advancedSnapshot.elements.find(e=>e.label==='Shadow name').reference,text:'In component'});assert.equal(shadow.getElementById('shadow-name').value,'In component');
+  pass('ARIA names, custom toggle states and open shadow-root targets are discovered and actionable');
+  const readable=await bridge.rpc(oauth.access_token,'tools/call',{name:'browser_snapshot',arguments:{tab_id:1}});
+  assert(!readable.isError);const readableText=readable.content[0].text;assert(readableText.startsWith('Page:'));assert(readableText.includes('checkbox "Subscribe to updates"'));assert(readableText.includes('checked=true'));assert(readableText.includes('switch "Notifications"'));assert(readableText.includes('checked=false'));
+  assert(readableText.includes('\nSave draft\n'),'Unrelated text matching a control must remain');assert(readableText.includes('Accept record'),'Visible text differing from its ARIA name must remain');
+  assert(readableText.includes('Total 10.50'),'Inline text fragments must retain punctuation and spacing');
+  pass('Default readable output retains action refs, states and unrelated or differently labelled visible text');
+  const changedName=text(await call('browser_snapshot',{tab_id:1,query:'Contact email'})).elements.find(e=>e.label==='Contact email').reference;
+  document.getElementById('aria-email-label').textContent='Different destination';assert.equal((await call('browser_fill',{tab_id:1,reference:changedName,text:'blocked'})).isError,true);
+  const formSnapshot=text(await call('browser_snapshot',{tab_id:1}));
+  const batchRefs=['Customer name','Notes'].map(label=>formSnapshot.elements.find(e=>e.label===label).reference);
+  const originalSend=chrome.tabs.sendMessage;
+  let signalStarted,resumeFirst,pauseFirst=true;
+  const firstStarted=new Promise(resolve=>{signalStarted=resolve;});const firstReleased=new Promise(resolve=>{resumeFirst=resolve;});
+  chrome.tabs.sendMessage=async(id,payload)=>{if(pauseFirst&&payload.command?.action==='fill'){pauseFirst=false;signalStarted();await firstReleased;}return originalSend(id,payload);};
+  try{
+    const pendingBatch=call('browser_fill_form',{tab_id:1,fields:[{type:'text',reference:batchRefs[0],text:'Concurrent customer'},{type:'text',reference:batchRefs[1],text:'Both edits retained'}]});
+    await firstStarted;const pendingRead=call('browser_snapshot',{tab_id:1});await delay(20);resumeFirst();
+    assert.equal((await pendingBatch).isError,false);const concurrentRead=text(await pendingRead);
+    assert.equal(concurrentRead.elements.find(e=>e.label==='Customer name').value,'Concurrent customer');assert.equal(concurrentRead.elements.find(e=>e.label==='Notes').value,'Both edits retained');
+  }finally{resumeFirst();chrome.tabs.sendMessage=originalSend;}
+  pass('A concurrent snapshot cannot interleave with a batch or invalidate its remaining refs');
+  advanced.remove();
+  pass('Changing an associated accessible name invalidates its action reference');
   assert.equal((await call('browser_scroll',{tab_id:1,pixels:500})).isError,false);assert.equal((await call('browser_scroll',{tab_id:1,pixels:6000})).isError,true);pass('Scroll actions enforce their bounds');
   assert.equal((await call('browser_navigate',{tab_id:1,url:'https://other.example/'})).isError,true);pass('Cross-origin navigation requires local user action');
   const shot=await call('browser_screenshot',{tab_id:1});assert(shot.content.some(c=>c.type==='image'&&c.mimeType==='image/png'));pass('MCP returns screenshot content as an image block (fixture image)');

@@ -14,12 +14,12 @@ export async function waitFor(fn, message, timeout=10_000) {
   while (Date.now()<deadline) {try {const value=await fn();if(value)return value;}catch{} await delay(75);}
   throw new Error(message);
 }
-export async function startBridge() {
+export async function startBridge(options = {}) {
   const probe=createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));
   const port=probe.address().port;await new Promise(r=>probe.close(r));
   const directory=await mkdtemp(join(tmpdir(),'browser-link-test-'));
   const base=`http://127.0.0.1:${port}`;
-  const binary=process.env.BROWSER_LINK_TEST_BINARY || join(root,'target/release',process.platform==='win32'?'browser-link-server.exe':'browser-link-server');
+  const binary=options.binary || process.env.BROWSER_LINK_TEST_BINARY || join(root,'target/release',process.platform==='win32'?'browser-link-server.exe':'browser-link-server');
   const process_=spawn(binary,[],{cwd:root,env:{...process.env,BROWSER_LINK_BIND:`127.0.0.1:${port}`,BROWSER_LINK_PUBLIC_URL:base,BROWSER_LINK_DATA_DIR:directory},stdio:['ignore','ignore','pipe']});
   let logs='';process_.stderr.on('data',d=>{logs+=d});
   process_.on('error',e=>{logs+=e.message});

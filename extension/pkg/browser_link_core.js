@@ -127,6 +127,10 @@ function __wbg_get_imports() {
             const ret = getObject(arg0).checked;
             return ret;
         },
+        __wbg_childNodes_9542af79c583ae90: function(arg0) {
+            const ret = getObject(arg0).childNodes;
+            return addHeapObject(ret);
+        },
         __wbg_click_d990e70c576b7c54: function(arg0) {
             getObject(arg0).click();
         },
@@ -164,6 +168,14 @@ function __wbg_get_imports() {
             const ret = getObject(arg0).getComputedStyle(getObject(arg1));
             return isLikeNone(ret) ? 0 : addHeapObject(ret);
         }, arguments); },
+        __wbg_getElementById_cc94972b404e4eaa: function(arg0, arg1, arg2) {
+            const ret = getObject(arg0).getElementById(getStringFromWasm0(arg1, arg2));
+            return isLikeNone(ret) ? 0 : addHeapObject(ret);
+        },
+        __wbg_getElementById_dfa9d72479c5de29: function(arg0, arg1, arg2) {
+            const ret = getObject(arg0).getElementById(getStringFromWasm0(arg1, arg2));
+            return isLikeNone(ret) ? 0 : addHeapObject(ret);
+        },
         __wbg_getOwnPropertyDescriptor_544b699e978e9c92: function(arg0, arg1) {
             const ret = Object.getOwnPropertyDescriptor(getObject(arg0), getObject(arg1));
             return addHeapObject(ret);
@@ -179,6 +191,10 @@ function __wbg_get_imports() {
             const ret = Object.getPrototypeOf(getObject(arg0));
             return addHeapObject(ret);
         },
+        __wbg_getRootNode_76c323f0bf80bdcd: function(arg0) {
+            const ret = getObject(arg0).getRootNode();
+            return addHeapObject(ret);
+        },
         __wbg_get_31af05bd4842a84f: function() { return handleError(function (arg0, arg1) {
             const ret = Reflect.get(getObject(arg0), getObject(arg1));
             return addHeapObject(ret);
@@ -191,12 +207,26 @@ function __wbg_get_imports() {
             const ret = getObject(arg0).height;
             return ret;
         },
+        __wbg_host_c1e5897b2ece281c: function(arg0) {
+            const ret = getObject(arg0).host;
+            return addHeapObject(ret);
+        },
         __wbg_innerText_210ec130237a8f65: function(arg0, arg1) {
             const ret = getObject(arg1).innerText;
             const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len1 = WASM_VECTOR_LEN;
             getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
             getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+        },
+        __wbg_instanceof_Document_b2a06e9deaeb61d1: function(arg0) {
+            let result;
+            try {
+                result = getObject(arg0) instanceof Document;
+            } catch (_) {
+                result = false;
+            }
+            const ret = result;
+            return ret;
         },
         __wbg_instanceof_Element_818e11074cdb63b5: function(arg0) {
             let result;
@@ -248,6 +278,16 @@ function __wbg_get_imports() {
             const ret = result;
             return ret;
         },
+        __wbg_instanceof_ShadowRoot_0ef114d846d9fd90: function(arg0) {
+            let result;
+            try {
+                result = getObject(arg0) instanceof ShadowRoot;
+            } catch (_) {
+                result = false;
+            }
+            const ret = result;
+            return ret;
+        },
         __wbg_instanceof_Window_82d71df4eddf88bc: function(arg0) {
             let result;
             try {
@@ -262,6 +302,10 @@ function __wbg_get_imports() {
             const ret = getObject(arg0).isConnected;
             return ret;
         },
+        __wbg_is_4b278c0bd3caba97: function(arg0, arg1) {
+            const ret = Object.is(getObject(arg0), getObject(arg1));
+            return ret;
+        },
         __wbg_item_2fbc5d9a03fe97aa: function(arg0, arg1) {
             const ret = getObject(arg0).item(arg1 >>> 0);
             return isLikeNone(ret) ? 0 : addHeapObject(ret);
@@ -270,6 +314,10 @@ function __wbg_get_imports() {
             const ret = getObject(arg0).length;
             return ret;
         },
+        __wbg_matches_6c4208e55bd9209e: function() { return handleError(function (arg0, arg1, arg2) {
+            const ret = getObject(arg0).matches(getStringFromWasm0(arg1, arg2));
+            return ret;
+        }, arguments); },
         __wbg_name_30e0a4c75dd37cb7: function(arg0, arg1) {
             const ret = getObject(arg1).name;
             const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_export, wasm.__wbindgen_export2);
@@ -283,6 +331,18 @@ function __wbg_get_imports() {
         },
         __wbg_new_with_event_init_dict_01492b2b3b06925c: function() { return handleError(function (arg0, arg1, arg2) {
             const ret = new Event(getStringFromWasm0(arg0, arg1), getObject(arg2));
+            return addHeapObject(ret);
+        }, arguments); },
+        __wbg_nodeType_67ecd66f2c7fb25d: function(arg0) {
+            const ret = getObject(arg0).nodeType;
+            return ret;
+        },
+        __wbg_parentElement_108b58de82cab63f: function(arg0) {
+            const ret = getObject(arg0).parentElement;
+            return isLikeNone(ret) ? 0 : addHeapObject(ret);
+        },
+        __wbg_querySelectorAll_35307ab0513d510c: function() { return handleError(function (arg0, arg1, arg2) {
+            const ret = getObject(arg0).querySelectorAll(getStringFromWasm0(arg1, arg2));
             return addHeapObject(ret);
         }, arguments); },
         __wbg_querySelectorAll_6aebfe3df1fb2014: function() { return handleError(function (arg0, arg1, arg2) {
@@ -322,6 +382,10 @@ function __wbg_get_imports() {
         },
         __wbg_set_textContent_6d6fc559f198055f: function(arg0, arg1, arg2) {
             getObject(arg0).textContent = arg1 === 0 ? undefined : getStringFromWasm0(arg1, arg2);
+        },
+        __wbg_shadowRoot_1e2b60ee336536cc: function(arg0) {
+            const ret = getObject(arg0).shadowRoot;
+            return isLikeNone(ret) ? 0 : addHeapObject(ret);
         },
         __wbg_static_accessor_GLOBAL_266715b9d96ba635: function() {
             const ret = typeof global === 'undefined' ? null : global;

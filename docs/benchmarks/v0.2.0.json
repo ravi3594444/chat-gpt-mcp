@@ -1,0 +1,50 @@
+{
+  "tokenizer": "o200k_base",
+  "method": "v0.1.3 and updated Wasm on identical fixed-geometry DOM fixtures, actual MCP replies",
+  "limitations": "Not a native Chrome, model-driven full-task, or billed-token benchmark.",
+  "versions": {
+    "baseline": "0.1.3",
+    "current": "0.2.0"
+  },
+  "tool_definitions": {
+    "baseline_tokens": 1317,
+    "current_tokens": 1674
+  },
+  "fixtures": [
+    {
+      "name": "contact-form",
+      "baseline_tokens": 201,
+      "current_tokens": 153,
+      "reduction_percent": 23.9,
+      "baseline_controls": 5,
+      "current_controls": 5,
+      "baseline_missing_targets": [],
+      "current_missing_targets": []
+    },
+    {
+      "name": "dashboard-103-controls",
+      "baseline_tokens": 3041,
+      "current_tokens": 1906,
+      "reduction_percent": 37.3,
+      "baseline_controls": 103,
+      "current_controls": 103,
+      "baseline_missing_targets": [],
+      "current_missing_targets": []
+    },
+    {
+      "name": "accessible-controls",
+      "baseline_tokens": 68,
+      "current_tokens": 103,
+      "reduction_percent": -51.5,
+      "baseline_controls": 1,
+      "current_controls": 4,
+      "baseline_missing_targets": [
+        "Contact email",
+        "Subscribe to updates",
+        "Notifications",
+        "Shadow save"
+      ],
+      "current_missing_targets": []
+    }
+  ]
+}

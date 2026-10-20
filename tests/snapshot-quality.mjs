@@ -37,7 +37,7 @@ try{
   const discovered=await bridge.rpc(auth.access_token,'tools/list');
   assert(discovered.tools.find(t=>t.name==='browser_snapshot')?.inputSchema?.properties?.detail,'Build the updated server source before running this check');
   const call=async args=>{
-    const result=await bridge.rpc(auth.access_token,'tools/call',{name:'browser_snapshot',arguments:{tab_id:1,...args}});
+    const result=await bridge.rpc(auth.access_token,'tools/call',{name:'browser_snapshot',arguments:{tab_id:1,format:'json',...args}});
     assert(!result.isError,result.content.map(c=>c.text).join('\n'));
     return JSON.parse(result.content.find(c=>c.type==='text').text);
   };

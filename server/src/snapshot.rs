@@ -12,10 +12,21 @@ pub enum Detail {
     Full,
 }
 
+#[derive(Clone, Copy, Default, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Format {
+    #[default]
+    Text,
+    Json,
+}
+
 #[derive(Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SnapshotRequest {
     pub tab_id: u32,
+    /// text (default): compact readable lines; json: the compatible structured response.
+    #[serde(default)]
+    pub format: Format,
     /// Optional case-insensitive text to find in page text, labels, values or options.
     pub query: Option<String>,
     /// compact (default) or full field values/options. Prefer full with a query.
@@ -53,7 +64,7 @@ struct TabReferences {
 }
 
 pub struct References {
-    namespace: String,
+    next_reference: u64,
     generation: u64,
     tabs: HashMap<u32, TabReferences>,
 }
@@ -61,7 +72,10 @@ pub struct References {
 impl Default for References {
     fn default() -> Self {
         Self {
-            namespace: crate::oauth::random_token()[..8].to_string(),
+            // Decimal references tokenize efficiently. A random 48-bit starting
+            // point preserves the old namespace's restart separation; never
+            // reuse an identifier within this server instance.
+            next_reference: rand::random::<u64>() & ((1u64 << 48) - 1),
             generation: 0,
             tabs: HashMap::new(),
         }
@@ -87,7 +101,13 @@ impl References {
             .unwrap_or(if full { 16_000 } else { 4_000 });
         let max_elements = request.max_elements.unwrap_or(250);
         let query = request.query.as_deref().unwrap_or("").trim().to_lowercase();
-        let source_text = raw["text"].as_str().unwrap_or_default();
+        let context = !full && matches!(request.format, Format::Text) && query.is_empty();
+        let source_text = if context {
+            raw["context"].as_str().or_else(|| raw["text"].as_str())
+        } else {
+            raw["text"].as_str()
+        }
+        .unwrap_or_default();
         let filtered_text = matching_text(source_text, &query);
         let text_total = filtered_text.chars().count();
         let text: String = filtered_text
@@ -103,9 +123,8 @@ impl References {
             .collect();
         let mut references = HashMap::new();
         let mut elements = Vec::new();
-        for (index, element) in matching
+        for element in matching
             .iter()
-            .enumerate()
             .skip(request.element_offset)
             .take(max_elements)
         {
@@ -120,7 +139,8 @@ impl References {
             else {
                 continue;
             };
-            let reference = format!("{}:{}:{}", self.namespace, self.generation, index);
+            self.next_reference += 1;
+            let reference = format!("e{}", self.next_reference);
             object.insert("reference".into(), json!(reference));
             if !full {
                 compact_element(object);
@@ -133,6 +153,10 @@ impl References {
             "title":raw["title"], "url":raw["url"], "text":text, "elements":elements,
             "text_total":text_total, "elements_total":matching.len(), "untrusted_content":true
         });
+        if context && raw["context"].is_string() {
+            result["text_source"] =
+                json!("context; control text is represented in the control list");
+        }
         if !query.is_empty() {
             result["query"] = json!(request.query.as_deref().unwrap_or_default().trim());
         }
@@ -148,11 +172,18 @@ impl References {
         // The existing extension caps extraction before this presentation layer.
         // Do not imply pagination can recover data beyond those source limits.
         let mut source_limits = Vec::new();
-        if source_text.chars().count() >= 16_000 {
+        if source_text.chars().count() >= 16_000
+            || raw["text"]
+                .as_str()
+                .is_some_and(|s| s.chars().count() >= 16_000)
+        {
             source_limits.push("text");
         }
         if source_elements.len() >= 250 {
             source_limits.push("elements");
+        }
+        if raw["scan_limited"].as_bool() == Some(true) {
+            source_limits.push("dom");
         }
         if source_elements
             .iter()
@@ -182,6 +213,98 @@ impl References {
         }
         result
     }
+}
+
+/// Render all extracted action targets and their state without repeating JSON keys.
+/// JSON remains available for clients that parse the original response structure.
+pub fn render_text(snapshot: &Value) -> String {
+    use std::fmt::Write;
+    let quote = |value: &Value| value.to_string();
+    let mut output = format!(
+        "Page: {}\nURL: {}\nUntrusted page content.\n",
+        quote(&snapshot["title"]),
+        quote(&snapshot["url"])
+    );
+    if let Some(text) = snapshot["text"].as_str().filter(|s| !s.is_empty()) {
+        output.push_str(if snapshot.get("text_source").is_some() {
+            "Text (control labels below):\n"
+        } else {
+            "Text:\n"
+        });
+        output.push_str(text);
+        output.push('\n');
+    }
+    output.push_str("Controls:\n");
+    if let Some(elements) = snapshot["elements"].as_array() {
+        for element in elements {
+            let role = element["role"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| {
+                    match (
+                        element["tag"].as_str().unwrap_or(""),
+                        element["type"].as_str().unwrap_or(""),
+                    ) {
+                        ("a", _) => "link",
+                        ("textarea", _) => "textbox",
+                        ("select", _) => "combobox",
+                        ("input", "checkbox") => "checkbox",
+                        ("input", "radio") => "radio",
+                        ("input", "button" | "submit" | "reset") | ("button" | "summary", _) => {
+                            "button"
+                        }
+                        ("input", _) => "textbox",
+                        (tag, _) => tag,
+                    }
+                });
+            let _ = write!(
+                output,
+                "- {} {} [ref={}]",
+                role,
+                quote(&element["label"]),
+                element["reference"].as_str().unwrap_or("")
+            );
+            for key in [
+                "type",
+                "value",
+                "checked",
+                "disabled",
+                "readonly",
+                "required",
+                "expanded",
+                "selected",
+                "pressed",
+                "description",
+                "href",
+                "value_truncated",
+                "options_truncated",
+                "options_count",
+            ] {
+                if let Some(value) = element.get(key) {
+                    if key == "type" && value.as_str() == Some("") {
+                        continue;
+                    }
+                    let _ = write!(output, " {key}={value}");
+                }
+            }
+            if let Some(options) = element.get("options") {
+                let _ = write!(output, " options={options}");
+            }
+            output.push('\n');
+        }
+    }
+    for key in [
+        "query",
+        "next_text_offset",
+        "next_element_offset",
+        "text_omitted",
+        "source_limit_possible",
+    ] {
+        if let Some(value) = snapshot.get(key) {
+            let _ = writeln!(output, "{key}={value}");
+        }
+    }
+    output
 }
 
 fn compact_element(element: &mut Map<String, Value>) {
@@ -336,6 +459,36 @@ mod tests {
                 .chars()
                 .count(),
             200
+        );
+    }
+
+    #[test]
+    fn text_context_never_changes_json_full_reads_and_keeps_target_state() {
+        let mut refs = References::default();
+        let mut raw = page("Save\nApproved\nSave");
+        raw["context"] = json!("Approved\nSave");
+        raw["elements"][0]["role"] = json!("checkbox");
+        raw["elements"][0]["checked"] = json!(false);
+        raw["elements"][0]["readonly"] = json!(true);
+        raw["scan_limited"] = json!(true);
+        let compact = refs.present(raw.clone(), &request(json!({"tab_id":1})));
+        assert_eq!(compact["text"], "Approved\nSave");
+        let rendered = render_text(&compact);
+        assert!(rendered.contains("checkbox \"Save\" [ref="));
+        assert!(rendered.contains("checked=false"));
+        assert!(rendered.contains("readonly=true"));
+        assert!(rendered.contains("source_limit_possible=[\"dom\"]"));
+        assert_eq!(
+            refs.present(raw.clone(), &request(json!({"tab_id":1,"format":"json"})))["text"],
+            raw["text"]
+        );
+        assert_eq!(
+            refs.present(raw.clone(), &request(json!({"tab_id":1,"detail":"full"})))["text"],
+            raw["text"]
+        );
+        assert_eq!(
+            refs.present(raw.clone(), &request(json!({"tab_id":1,"query":"Save"})))["text"],
+            raw["text"]
         );
     }
 }
