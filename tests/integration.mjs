@@ -16,6 +16,7 @@ let rust;
 const listeners=[];
 let tabListeners=[];
 let activeId=1;
+let latestRawSnapshot;
 const tabs=new Map([[1,{id:1,windowId:1,url:'https://fixture.example/contact',title:'Contact fixture'}],[2,{id:2,windowId:1,url:'https://private.example/account',title:'Private tab'}]]);
 const dom=new JSDOM(fixtureHTML,{url:tabs.get(1).url,pretendToBeVisual:true});
 for(const name of ['Window','Document','Element','Node','HtmlElement','HTMLElement','HTMLInputElement','HTMLTextAreaElement','HTMLSelectElement','Event','EventInit'])if(dom.window[name])globalThis[name]=dom.window[name];
@@ -36,7 +37,12 @@ globalThis.chrome={
     get:async id=>{if(!tabs.has(id))throw new Error('Unknown tab');return {...tabs.get(id)};},
     query:async()=>[{...tabs.get(activeId)}],
     update:async(id,patch)=>{Object.assign(tabs.get(id),patch);if(patch.active)activeId=id;if(patch.url){dom.reconfigure({url:patch.url});for(const fn of tabListeners)await fn(id,{url:patch.url});}return {...tabs.get(id)};},
-    sendMessage:async(id,message)=>message.type==='browser-link-ping'?{ready:true}:{result:JSON.parse(rust.operate(JSON.stringify(message.command)))},
+    sendMessage:async(id,message)=>{
+      if(message.type==='browser-link-ping')return {ready:true};
+      const result=JSON.parse(rust.operate(JSON.stringify(message.command)));
+      if(message.command.action==='snapshot')latestRawSnapshot=result;
+      return {result};
+    },
     captureVisibleTab:async()=> 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jYioAAAAASUVORK5CYII=',
     onRemoved:{addListener:()=>{}},onUpdated:{addListener:fn=>tabListeners.push(fn)}
   },
@@ -87,6 +93,50 @@ try {
   document.querySelector('button[type="submit"]').textContent='Save draft';pass('Changed element meaning requires a fresh inspection before a click');
   assert.equal((await call('browser_click',{tab_id:1,reference:save})).isError,false);assert.equal(document.getElementById('result').textContent,'Draft saved for Alex');pass('A click submits only the local fixture and its outcome is observable');
   await call('browser_snapshot',{tab_id:1});assert.equal((await call('browser_click',{tab_id:1,reference:save})).isError,true);pass('A new snapshot invalidates previous element references');
+  const focused=text(await call('browser_snapshot',{tab_id:1,query:'CUSTOMER NAME',max_chars:0}));
+  assert.equal(focused.elements.length,1);assert.equal(focused.elements[0].label,'Customer name');assert.equal(focused.text,'');
+  assert(focused.elements[0].reference.length < 30);assert(!('disabled' in focused.elements[0]));
+  pass('Compact search returns short references and supports controls-only reads');
+  for(const args of [{max_chars:16001},{max_elements:0},{query:'x'.repeat(201)},{element_offset:251}])assert.equal((await call('browser_snapshot',{tab_id:1,...args})).isError,true);
+  assert.equal((await call('browser_fill',{tab_id:1,reference:focused.elements[0].reference,text:'Alex'})).isError,false);
+  assert.equal((await call('browser_fill',{tab_id:2,reference:focused.elements[0].reference,text:'blocked'})).isError,true);
+  pass('Invalid snapshot limits preserve references; references cannot cross tabs');
+  const bulk=document.createElement('section');
+  bulk.innerHTML='<p>'+('Local dashboard activity. '.repeat(800))+'</p>'+Array.from({length:100},(_,i)=>`<button>Action ${String(i).padStart(3,'0')}</button>`).join('');
+  document.body.append(bulk);
+  const compact=text(await call('browser_snapshot',{tab_id:1}));
+  assert.equal(compact.text.length,4000);assert.equal(compact.elements.length,40);
+  assert.equal(compact.next_text_offset,4000);assert.equal(compact.next_element_offset,40);
+  assert(compact.source_limit_possible.includes('text'));
+  const before=JSON.stringify(latestRawSnapshot),after=JSON.stringify(compact);
+  const benchmark={fixture:'100 dashboard actions and more than 16000 characters of activity text',raw_chars:before.length,compact_chars:after.length,raw_bytes:Buffer.byteLength(before),compact_bytes:Buffer.byteLength(after),character_reduction_percent:Number((100*(1-after.length/before.length)).toFixed(1)),note:'Serialized tool-result text, not total ChatGPT tokens or billing.'};
+  assert(after.length < before.length*0.5);
+  await writeFile(join(results,'snapshot-size.json'),JSON.stringify(benchmark,null,2)+'\n');
+  pass('Default snapshot bounds text and controls and cuts fixture payload by over half');
+  const next=text(await call('browser_snapshot',{tab_id:1,text_offset:compact.next_text_offset,element_offset:compact.next_element_offset}));
+  assert.equal(next.elements[0].label,latestRawSnapshot.elements[40].label);
+  assert.equal(next.text,latestRawSnapshot.text.slice(4000,8000));
+  assert.equal((await call('browser_click',{tab_id:1,reference:compact.elements[0].reference})).isError,true);
+  pass('Pagination retrieves omitted content and invalidates earlier page references');
+  const last=text(await call('browser_snapshot',{tab_id:1,query:'Action 099',max_chars:0}));
+  assert.equal(last.elements.length,1);assert.equal(last.elements[0].label,'Action 099');
+  pass('Focused search finds controls outside the default first page');
+  const nativePlan=document.getElementById('plan');
+  for(let i=0;i<20;i++){const option=document.createElement('option');option.value=`extra-${i}`;option.textContent=`Extra plan ${i}`;nativePlan.append(option);}
+  const smallOptions=text(await call('browser_snapshot',{tab_id:1,query:'Plan',max_chars:0})).elements.find(e=>e.label==='Plan');
+  assert.equal(smallOptions.options.length,5);assert(smallOptions.options_truncated);
+  const fullOptions=text(await call('browser_snapshot',{tab_id:1,query:'Plan',detail:'full',max_chars:0})).elements.find(e=>e.label==='Plan');
+  assert.equal(fullOptions.options.length,22);
+  assert.equal((await call('browser_select',{tab_id:1,reference:fullOptions.reference,value:'extra-19'})).isError,false);
+  pass('Full focused detail recovers omitted options and selects through the original Wasm reference');
+  let notes=text(await call('browser_snapshot',{tab_id:1,query:'Notes',max_chars:0})).elements[0];
+  const longNote='Long local note. '.repeat(40);
+  assert.equal((await call('browser_fill',{tab_id:1,reference:notes.reference,text:longNote})).isError,false);
+  notes=text(await call('browser_snapshot',{tab_id:1,query:'Notes',max_chars:0})).elements[0];
+  assert.equal(notes.value.length,160);assert(notes.value_truncated);
+  notes=text(await call('browser_snapshot',{tab_id:1,query:'Notes',detail:'full',max_chars:0})).elements[0];
+  assert.equal(notes.value,longNote);
+  bulk.remove();pass('Long values are marked in compact output and recovered with full detail');
   assert.equal((await call('browser_scroll',{tab_id:1,pixels:500})).isError,false);assert.equal((await call('browser_scroll',{tab_id:1,pixels:6000})).isError,true);pass('Scroll actions enforce their bounds');
   assert.equal((await call('browser_navigate',{tab_id:1,url:'https://other.example/'})).isError,true);pass('Cross-origin navigation requires local user action');
   const shot=await call('browser_screenshot',{tab_id:1});assert(shot.content.some(c=>c.type==='image'&&c.mimeType==='image/png'));pass('MCP returns screenshot content as an image block (fixture image)');

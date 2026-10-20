@@ -1,6 +1,7 @@
 mod bridge;
 mod mcp;
 mod oauth;
+mod snapshot;
 
 use axum::{
     body::Body,
@@ -49,7 +50,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     let bridge = Bridge::new();
-    let mcp_bridge = bridge.clone();
+    // Stateless HTTP requests must share the short-reference cache.
+    let mcp_browser = mcp::BrowserMcp::new(bridge.clone());
     let mut mcp_config = StreamableHttpServerConfig::default().with_allowed_hosts([
         url.host_str().unwrap_or("127.0.0.1"),
         "127.0.0.1",
@@ -58,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     mcp_config.legacy_session_mode = false;
     mcp_config.json_response = true;
     let service = StreamableHttpService::new(
-        move || Ok(mcp::BrowserMcp::new(mcp_bridge.clone())),
+        move || Ok(mcp_browser.clone()),
         Arc::new(LocalSessionManager::default()),
         mcp_config,
     );

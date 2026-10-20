@@ -87,7 +87,7 @@ This creates `plugin/mcp.json` with the real endpoint. `plugin/mcp.example.json`
 
 `browser_status`, `browser_tabs`, `browser_snapshot`, `browser_click`, `browser_fill`, `browser_select`, `browser_scroll`, `browser_navigate`, `browser_screenshot`.
 
-Snapshots return text, current field values except password/file inputs, and up to 250 interactive element references. A new snapshot invalidates old references. Removed/hidden elements and changed element identities are rejected. Clicks may have real consequences; the agent must follow the user's authorized task and verify outcomes. Timed-out actions are not retried automatically.
+Server 0.1.2 returns compact snapshots by default: up to 4,000 text characters and 40 controls, short references, and marked omissions. Use `query` to focus a read, returned offsets to page through extracted data, or `detail: "full"` for complete extracted values/options. A new snapshot invalidates that tab's old references. Removed/hidden elements and changed element identities are rejected. Clicks may have real consequences; the agent must follow the user's authorized task and verify outcomes. Timed-out actions are not retried automatically. See [token usage and VM update steps](docs/TOKEN-USAGE.md); the bundled binary remains v0.1.0 and needs the source-build override for these features.
 
 This version operates the top-level document. It does not automate password entry, file uploads, browser settings, arbitrary JavaScript, cross-origin frames, closed shadow roots, or canvas controls. Screenshots use the active enabled tab's visible viewport and can contain private page content. The extension has no cookie-export or browsing-history API. There is one paired, connected browser per bridge.
 

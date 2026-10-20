@@ -1,0 +1,9 @@
+# Layer over compose.vm.yaml to build current source instead of the bundled v0.1.0 binary.
+services:
+  bridge:
+    build:
+      dockerfile: Dockerfile
+      args:
+        CARGO_BUILD_JOBS: "1"
+        CARGO_PROFILE_RELEASE_LTO: "false"
+        CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"

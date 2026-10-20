@@ -1,8 +1,12 @@
 FROM rust:1.99.1-bookworm AS builder
 WORKDIR /build
-COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+# The base image pins Rust; a server build does not need the Wasm target.
+COPY Cargo.toml Cargo.lock ./
 COPY core ./core
 COPY server ./server
+ARG CARGO_BUILD_JOBS=1
+ARG CARGO_PROFILE_RELEASE_LTO=false
+ARG CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
 RUN cargo build --release --locked -p browser-link-server
 
 FROM debian:bookworm-slim
