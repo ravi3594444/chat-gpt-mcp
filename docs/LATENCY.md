@@ -1,6 +1,6 @@
-# Browser Link latency diagnostics (extension 0.2.1)
+# Browser Link latency diagnostics (extension 0.2.2)
 
-The 0.2.1 extension works with the existing 0.2.0 source-built server and compiled Wasm. It adds measurements to successful individual action replies and prevents an unanswered Chrome message from holding the worker queue indefinitely. It does not establish the cause of the previously observed approximately 5.5-second live tool calls.
+The 0.2.2 extension works with the existing 0.2.0 source-built server and compiled Wasm. It adds measurements to successful individual action replies and prevents an unanswered Chrome message from holding the worker queue indefinitely. It does not establish the cause of the previously observed approximately 5.5-second live tool calls.
 
 ## Install
 
@@ -14,7 +14,7 @@ Successful individual action replies now include a small `timing` object:
 
 | Field | Measurement |
 | --- | --- |
-| `extension_version` | Adapter version, expected `0.2.1` |
+| `extension_version` | Adapter version, expected `0.2.2` |
 | `extension_queue_ms` | Arrival at the worker until the command starts |
 | `extension_prepare_ms` | Command start until page-command dispatch, including validation, permission checks and content readiness |
 | `page_roundtrip_ms` | Chrome content-message dispatch through receipt of its reply |

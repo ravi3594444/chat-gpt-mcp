@@ -45,9 +45,9 @@ Keep the setup key local. Enter it in the extension and the bridge's own OAuth p
 ## 2. Load the extension
 
 1. Open `chrome://extensions` and enable **Developer mode**.
-2. Select **Load unpacked**, then select this package's `extension` folder.
+2. Select **Load unpacked**, then select this package's `extension` folder. For later updates, replace files in that same folder and click **Reload** on the existing Chrome extension. Removing and reinstalling it clears its saved pairing.
 3. Pin **Browser Link** to the toolbar and open it.
-4. Enter the bridge origin (`http://127.0.0.1:7319` for a local test) and its setup key.
+4. The server address defaults to `https://extension-chat.duckdns.org` for the personal deployment. Change it to `http://127.0.0.1:7319` for a local test or to your own bridge origin, then enter that bridge's setup key once. The popup reuses a saved server and pairing token after reload; the setup key is not bundled or retained.
 5. Select **Pair browser**. Chrome requests access only to that bridge address.
 6. Open the website you want to use. Click the toolbar extension and select **Enable this tab**.
 
@@ -87,7 +87,7 @@ This creates `plugin/mcp.json` with the real endpoint. `plugin/mcp.example.json`
 
 `browser_status`, `browser_tabs`, `browser_snapshot`, `browser_click`, `browser_fill`, `browser_fill_form`, `browser_select`, `browser_scroll`, `browser_navigate`, `browser_screenshot`.
 
-Extension **0.2.1** adds per-action browser timing measurements, bounded command waits, and protection against late execution after a timeout. It works with the existing **0.2.0 source server**; no VM rebuild is required. Update the installed extension files, reload the extension and the target pages, then inspect the next successful individual action's `timing` fields. See [latency diagnostics and recovery](docs/LATENCY.md) for the measurements, limits and tests.
+Extension **0.2.2** adds per-action browser timing measurements, bounded command waits, and protection against late execution after a timeout. It works with the existing **0.2.0 source server**; no VM rebuild is required. Update the installed extension files, reload the extension and the target pages, then inspect the next successful individual action's `timing` fields. See [latency diagnostics and recovery](docs/LATENCY.md) for the measurements, limits and tests.
 
 Server/extension 0.2.0 uses readable, Playwright-style control lines by default. It preserves all extracted controls (up to 250), field/toggle state, exact action references and omission notices. Control text is removed from the context section only when the same complete text is already its returned control label. Unrelated matching words and visible text differing from an ARIA name remain. Use `format: "json"` for the compatible structured response, `query` for focused reads, or `detail: "full"` for page-wide text and complete extracted values/options. Each snapshot replaces that tab's references. References remain scoped to the tab and are checked against the original Wasm element identity.
 
@@ -103,7 +103,7 @@ Install Rust and the pinned toolchain, then:
 
 ```bash
 rustup target add wasm32-unknown-unknown --toolchain 1.99.1
-cargo install wasm-bindgen-cli --version 0.2.129 --locked
+cargo install wasm-bindgen-cli --version 0.2.229 --locked
 python3 scripts/build.py
 ```
 

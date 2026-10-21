@@ -109,7 +109,7 @@ try {
   const clickRoundtrip=performance.now()-clickStarted;
   assert.equal(clickResult.isError,false);assert.equal(document.getElementById('result').textContent,'Draft saved for Alex');pass('A click submits only the local fixture and its outcome is observable');
   const clickTiming=text(clickResult).timing;
-  assert.equal(clickTiming.extension_version,'0.2.1');
+  assert.equal(clickTiming.extension_version,'0.2.2');
   for(const key of ['extension_queue_ms','extension_prepare_ms','page_roundtrip_ms','page_execution_ms','extension_work_ms','extension_total_ms'])assert(Number.isFinite(clickTiming[key])&&clickTiming[key]>=0,key);
   assert(clickTiming.extension_total_ms<=clickRoundtrip+1);
   await writeFile(join(results,'click-latency.json'),JSON.stringify({scope:'Local Rust MCP + OAuth + WebSocket + Wasm, with jsdom/Chrome API fixtures. No ChatGPT routing, model inference, public VM or native Chrome.',tool_roundtrip_ms:clickRoundtrip,timing:clickTiming},null,2)+'\n');

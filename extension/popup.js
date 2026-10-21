@@ -2,8 +2,13 @@ const $ = id => document.getElementById(id);
 const send = message => chrome.runtime.sendMessage(message).then(result => { if (result?.error) throw new Error(result.error); return result; });
 let currentTab;
 let latest;
+let serverInitialized = false;
 async function refresh() {
   latest = await send({type:'status'});
+  if (!serverInitialized) {
+    if (latest.server) $('server').value = latest.server;
+    serverInitialized = true;
+  }
   currentTab = (await chrome.tabs.query({active:true,currentWindow:true}))[0];
   $('status').textContent = latest.state === 'connected' ? 'Connected to your bridge' : latest.paused ? 'Access stopped' : latest.state === 'connecting' ? 'Connecting…' : 'Bridge disconnected';
   $('dot').classList.toggle('live',latest.state === 'connected');

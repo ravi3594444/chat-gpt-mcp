@@ -27,7 +27,7 @@ function withinDeadline(context, task) {
   return Promise.race([Promise.resolve().then(task),expired]).finally(() => { clearTimeout(timer); context.cancel = null; });
 }
 function timingReport(context) {
-  return {extension_version:'0.2.1',...context.timing,extension_work_ms:milliseconds(performance.now()-context.started),extension_total_ms:milliseconds(performance.now()-context.received)};
+  return {extension_version:'0.2.2',...context.timing,extension_work_ms:milliseconds(performance.now()-context.started),extension_total_ms:milliseconds(performance.now()-context.received)};
 }
 
 function originOf(url) {

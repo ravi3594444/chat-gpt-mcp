@@ -57,7 +57,7 @@ test('Successful actions expose only numeric stage durations and the extension v
   try{
     const response=await f.command('click').reply();assert(!response.error);
     const timing=response.result.timing;
-    assert.equal(timing.extension_version,'0.2.1');
+    assert.equal(timing.extension_version,'0.2.2');
     for(const [key,value] of Object.entries(timing))if(key!=='extension_version')assert(Number.isFinite(value)&&value>=0,key);
     assert.equal(timing.page_execution_ms,0.25);assert.equal(timing.page_ready_ms,0.1);
     assert(timing.extension_total_ms>=timing.extension_work_ms);

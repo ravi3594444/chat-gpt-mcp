@@ -64,7 +64,7 @@
   },
   "token_benchmark": "docs/benchmarks/v0.2.0.json",
   "vm_docker_build_verified": false,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "server_version": "0.2.0",
   "rust_checks_note": "Rust source and compiled Wasm are unchanged. The verified v0.2.0 source-server binary was reused for the 47 integration checks; Rust unit tests and Clippy were last run for v0.2.0 and were not rerun for this extension-only update.",
   "latency_regression_tests": {
@@ -75,17 +75,28 @@
   },
   "local_click_latency": {
     "scope": "Local Rust MCP + OAuth + WebSocket + Wasm, with jsdom/Chrome API fixtures. No ChatGPT routing, model inference, public VM or native Chrome.",
-    "tool_roundtrip_ms": 22.786639999999807,
+    "tool_roundtrip_ms": 8.199018999999907,
     "timing": {
-      "extension_prepare_ms": 0.07,
-      "extension_queue_ms": 0.02,
-      "extension_total_ms": 18.79,
-      "extension_version": "0.2.1",
-      "extension_work_ms": 18.77,
-      "page_execution_ms": 18.66,
+      "extension_prepare_ms": 0.04,
+      "extension_queue_ms": 0.01,
+      "extension_total_ms": 6.08,
+      "extension_version": "0.2.2",
+      "extension_work_ms": 6.06,
+      "page_execution_ms": 6,
       "page_ready_ms": 0,
-      "page_roundtrip_ms": 18.67
+      "page_roundtrip_ms": 6
     }
   },
-  "live_latency_root_cause_verified": false
+  "live_latency_root_cause_verified": false,
+  "popup_setup_smoke": {
+    "passed": true,
+    "scope": "jsdom popup adapter smoke check; native Chrome not run",
+    "checks": [
+      "personal server URL prefilled",
+      "saved server restored",
+      "paired setup form hidden",
+      "setup key starts empty",
+      "polling preserves URL edits"
+    ]
+  }
 }
