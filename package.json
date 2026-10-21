@@ -1,10 +1,11 @@
 {
   "name": "browser-link",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "scripts": {
     "test": "node tests/integration.mjs",
+    "test:latency": "node --test tests/latency.mjs",
     "test:chrome": "node tests/chrome.mjs",
     "test:quality": "node tests/snapshot-quality.mjs",
     "test:tokens": "node tests/snapshot-tokens.mjs"

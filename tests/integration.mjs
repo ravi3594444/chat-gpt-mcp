@@ -39,9 +39,10 @@ globalThis.chrome={
     update:async(id,patch)=>{Object.assign(tabs.get(id),patch);if(patch.active)activeId=id;if(patch.url){dom.reconfigure({url:patch.url});for(const fn of tabListeners)await fn(id,{url:patch.url});}return {...tabs.get(id)};},
     sendMessage:async(id,message)=>{
       if(message.type==='browser-link-ping')return {ready:true};
+      const started=performance.now();
       const result=JSON.parse(rust.operate(JSON.stringify(message.command)));
       if(message.command.action==='snapshot')latestRawSnapshot=result;
-      return {result};
+      return {result,timing:{page_ready_ms:0,page_execution_ms:performance.now()-started}};
     },
     captureVisibleTab:async()=> 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jYioAAAAASUVORK5CYII=',
     onRemoved:{addListener:()=>{}},onUpdated:{addListener:fn=>tabListeners.push(fn)}
@@ -103,7 +104,16 @@ try {
   document.querySelector('button[type="submit"]').textContent='Delete everything';
   assert.equal((await call('browser_click',{tab_id:1,reference:save})).isError,true);
   document.querySelector('button[type="submit"]').textContent='Save draft';pass('Changed element meaning requires a fresh inspection before a click');
-  assert.equal((await call('browser_click',{tab_id:1,reference:save})).isError,false);assert.equal(document.getElementById('result').textContent,'Draft saved for Alex');pass('A click submits only the local fixture and its outcome is observable');
+  const clickStarted=performance.now();
+  const clickResult=await call('browser_click',{tab_id:1,reference:save});
+  const clickRoundtrip=performance.now()-clickStarted;
+  assert.equal(clickResult.isError,false);assert.equal(document.getElementById('result').textContent,'Draft saved for Alex');pass('A click submits only the local fixture and its outcome is observable');
+  const clickTiming=text(clickResult).timing;
+  assert.equal(clickTiming.extension_version,'0.2.1');
+  for(const key of ['extension_queue_ms','extension_prepare_ms','page_roundtrip_ms','page_execution_ms','extension_work_ms','extension_total_ms'])assert(Number.isFinite(clickTiming[key])&&clickTiming[key]>=0,key);
+  assert(clickTiming.extension_total_ms<=clickRoundtrip+1);
+  await writeFile(join(results,'click-latency.json'),JSON.stringify({scope:'Local Rust MCP + OAuth + WebSocket + Wasm, with jsdom/Chrome API fixtures. No ChatGPT routing, model inference, public VM or native Chrome.',tool_roundtrip_ms:clickRoundtrip,timing:clickTiming},null,2)+'\n');
+  pass('Click stage timings pass through the unchanged Rust server without browser data or credentials');
   await call('browser_snapshot',{tab_id:1});assert.equal((await call('browser_click',{tab_id:1,reference:save})).isError,true);pass('A new snapshot invalidates previous element references');
   const focused=text(await call('browser_snapshot',{tab_id:1,query:'CUSTOMER NAME',max_chars:0}));
   assert.equal(focused.elements.length,1);assert.equal(focused.elements[0].label,'Customer name');assert.equal(focused.text,'');

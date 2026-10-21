@@ -26,6 +26,7 @@
     "A failed batch reports partial completion and never executes later fields",
     "Changed element meaning requires a fresh inspection before a click",
     "A click submits only the local fixture and its outcome is observable",
+    "Click stage timings pass through the unchanged Rust server without browser data or credentials",
     "A new snapshot invalidates previous element references",
     "Compact search returns short references and supports controls-only reads",
     "Invalid snapshot limits preserve references; references cannot cross tabs",
@@ -48,20 +49,43 @@
     "Revoked OAuth access tokens cannot call MCP",
     "Unpair removes the local credential and revokes it on the server"
   ],
-  "passed": 46,
+  "passed": 47,
   "chrome_verified": false,
   "limitation": "Local Chrome cannot launch in the build workspace because AF_UNIX sockets are blocked. Run npm run test:chrome on a normal machine.",
-  "version": "0.2.0",
   "rust_unit_tests_passed": 6,
-  "clippy_native_and_wasm": "passed",
+  "clippy_native_and_wasm": "last passed v0.2.0; not rerun (Rust unchanged)",
   "source_server_sha256": "38be6377e558cbdfaf1bf3f39b5fcdd73c3c524cdf72ca6976e09df54694e5c0",
   "wasm_sha256": "f9453fd92d1147866eeba9e4727aaf1dc92a2b04912a83a248f84dd7726aee87",
   "bundled_server": {
     "version": "0.1.0",
     "path": "bin/browser-link-server-linux-x86_64",
     "sha256": "d4763f06aa74f1e2bdcae8b6320c1524f1fe0a73b3c0222683ba299e8fe7fcdf",
-    "note": "Unchanged historical binary. Deploy 0.2.0 from source using compose.vm.source.yaml."
+    "note": "Unchanged historical v0.1.0 binary. The source server remains v0.2.0; extension v0.2.1 was tested against that source server."
   },
   "token_benchmark": "docs/benchmarks/v0.2.0.json",
-  "vm_docker_build_verified": false
+  "vm_docker_build_verified": false,
+  "version": "0.2.1",
+  "server_version": "0.2.0",
+  "rust_checks_note": "Rust source and compiled Wasm are unchanged. The verified v0.2.0 source-server binary was reused for the 47 integration checks; Rust unit tests and Clippy were last run for v0.2.0 and were not rerun for this extension-only update.",
+  "latency_regression_tests": {
+    "command": "npm run test:latency",
+    "passed": 10,
+    "failed": 0,
+    "scope": "Actual worker/content adapters with synthetic Chrome APIs and short test command expirations; includes late-dispatch, queue recovery, Stop/Resume and timing metadata."
+  },
+  "local_click_latency": {
+    "scope": "Local Rust MCP + OAuth + WebSocket + Wasm, with jsdom/Chrome API fixtures. No ChatGPT routing, model inference, public VM or native Chrome.",
+    "tool_roundtrip_ms": 22.786639999999807,
+    "timing": {
+      "extension_prepare_ms": 0.07,
+      "extension_queue_ms": 0.02,
+      "extension_total_ms": 18.79,
+      "extension_version": "0.2.1",
+      "extension_work_ms": 18.77,
+      "page_execution_ms": 18.66,
+      "page_ready_ms": 0,
+      "page_roundtrip_ms": 18.67
+    }
+  },
+  "live_latency_root_cause_verified": false
 }
